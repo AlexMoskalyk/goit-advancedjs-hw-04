@@ -17,8 +17,10 @@ const elements = {
   guard: document.querySelector('.js-guard'),
 };
 
+let limitPage;
 let page = 1;
 let galleryMode;
+const objectsPerPage = 40;
 
 elements.form.addEventListener('submit', handleForm);
 
@@ -30,6 +32,7 @@ const options = {
   threshold: 1.0,
 };
 const observer = new IntersectionObserver(handlerLoadMore, options);
+
 // -------------------------------
 
 function initGallery() {
@@ -41,13 +44,25 @@ function initGallery() {
 async function handleForm(evt) {
   evt.preventDefault();
   showLoader();
-  elements.gallery.innerHTML = '';
+  observer.unobserve(elements.guard);
   page = 1;
+  elements.gallery.innerHTML = '';
 
   const { searchQuery } = evt.currentTarget.elements;
   const optimizeSearchQuery = searchQuery.value.trim().toLowerCase();
+  if (!optimizeSearchQuery) {
+    hideLoader();
+    return iziToast.show({
+      title: 'Warrning',
+      message: 'Write the requset value!',
+      color: 'yellow',
+      position: 'bottomRight',
+    });
+  }
+
   try {
     const data = await fetchImages(optimizeSearchQuery, page);
+
     if (data.hits.length <= 0) {
       iziToast.show({
         title: 'Warrning',
@@ -68,6 +83,11 @@ async function handleForm(evt) {
 
     elements.gallery.innerHTML = createMarkUp(data.hits);
     initGallery();
+    limitPage = Math.ceil(data.totalHits / objectsPerPage);
+
+    if (data.hits.length < data.totalHits) {
+      observer.observe(elements.guard);
+    }
   } catch (error) {
     iziToast.show({
       title: 'Error',
@@ -77,8 +97,6 @@ async function handleForm(evt) {
     });
   } finally {
     hideLoader();
-    observer.observe(elements.guard);
-    // showLoadMoreBtn();
   }
 }
 
@@ -133,17 +151,18 @@ async function handlerLoadMore(entries) {
         .trim()
         .toLowerCase();
 
+      if (page > limitPage) {
+        observer.unobserve(elements.guard);
+        return iziToast.show({
+          title: 'Warrning',
+          message: 'No more images to load.',
+          color: 'yellow',
+          position: 'bottomRight',
+        });
+      }
+
       try {
         const data = await fetchImages(optimizeSearchQuery, page);
-        if (data.hits.length <= 0) {
-          iziToast.show({
-            title: 'Warrning',
-            message: 'No more images to load.',
-            color: 'yellow',
-            position: 'bottomRight',
-          });
-          observer.unobserve(elements.guard);
-        }
 
         elements.gallery.insertAdjacentHTML(
           'beforeend',
